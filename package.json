@@ -1,0 +1,39 @@
+{
+  "name": "cardlane",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "test": "vitest run",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@sveltejs/adapter-auto": "^7.0.1",
+    "@sveltejs/kit": "^2.64.0",
+    "svelte": "^5.56.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@types/node": "^25.9.2",
+    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.0",
+    "eslint": "^10.4.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-svelte": "^3.19.0",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.4",
+    "prettier-plugin-svelte": "^4.1.0",
+    "svelte-check": "^4.6.0",
+    "svelte-eslint-parser": "^1.8.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
+  }
+}

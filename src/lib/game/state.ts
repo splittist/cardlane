@@ -10,6 +10,8 @@ export const LANE_COUNT = 3;
 export interface InitialStateOptions {
   shuffle?: boolean;
   rng?: () => number;
+  playerDeckDefinition?: readonly string[];
+  opponentDeckDefinition?: readonly string[];
 }
 
 function cloneCard(card: Card): Card {
@@ -52,14 +54,14 @@ export function shuffleDeck<T>(cards: T[], rng: () => number = Math.random): T[]
   return shuffled;
 }
 
-function createPlayer(id: PlayerId): PlayerState {
+function createPlayer(id: PlayerId, deckDefinition?: readonly string[]): PlayerState {
   return {
     id,
     name: id === 'player' ? 'You' : 'AI Opponent',
     heroHealth: HERO_HEALTH,
     mana: STARTING_MANA,
     maxMana: STARTING_MANA,
-    deck: createDeck(id),
+    deck: createDeck(id, deckDefinition),
     hand: [],
     discard: []
   };
@@ -92,12 +94,12 @@ export function drawCard(state: GameState, playerId: PlayerId, count = 1): GameS
 }
 
 export function createInitialState(options: InitialStateOptions = {}): GameState {
-  const { shuffle = true, rng = Math.random } = options;
+  const { shuffle = true, rng = Math.random, playerDeckDefinition, opponentDeckDefinition } = options;
 
   const initialState: GameState = {
     players: {
-      player: createPlayer('player'),
-      opponent: createPlayer('opponent')
+      player: createPlayer('player', playerDeckDefinition),
+      opponent: createPlayer('opponent', opponentDeckDefinition)
     },
     lanes: createLanes(),
     currentTurn: 'player',

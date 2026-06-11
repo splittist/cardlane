@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createCardInstance } from './cards';
+import { STARTING_DECK, createCardInstance } from './cards';
 import { applyAction, checkWinCondition, getLegalActions, resolveCombat } from './rules';
 import { createInitialState, drawCard } from './state';
 import type { GameState } from './types';
@@ -91,6 +91,17 @@ describe('game rules', () => {
     expect(initial.players.player.hand).toHaveLength(4);
     expect(drawn.players.player.hand).toHaveLength(5);
     expect(drawn.players.player.deck).toHaveLength(initial.players.player.deck.length - 1);
+  });
+
+  it('supports custom player deck definitions during setup', () => {
+    const reversedDeck = [...STARTING_DECK].reverse();
+    const initial = createInitialState({
+      shuffle: false,
+      playerDeckDefinition: reversedDeck
+    });
+
+    const expectedInitialHand = reversedDeck.slice(0, 4);
+    expect(initial.players.player.hand.map((card) => card.id)).toEqual(expectedInitialHand);
   });
 
   it('spends mana when playing a card and keeps the card on the board', () => {

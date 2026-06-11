@@ -1,133 +1,147 @@
 import { describe, expect, it } from 'vitest';
 
-import { STARTING_DECK, createCardInstance } from './cards';
-import { applyAction, checkWinCondition, getLegalActions, resolveCombat } from './rules';
-import { createInitialState, drawCard } from './state';
-import type { GameState } from './types';
+import { OPPONENT_STARTING_DECK, STARTING_DECK } from './cards';
+import { applyAction, getLegalActions } from './rules';
+import { createInitialState } from './state';
 
-function createCombatState(): GameState {
-  return {
-    players: {
-      player: {
-        id: 'player',
-        name: 'You',
-        heroHealth: 30,
-        mana: 3,
-        maxMana: 3,
-        deck: [],
-        hand: [],
-        discard: []
-      },
-      opponent: {
-        id: 'opponent',
-        name: 'AI Opponent',
-        heroHealth: 30,
-        mana: 3,
-        maxMana: 3,
-        deck: [],
-        hand: [],
-        discard: []
-      }
-    },
-    lanes: [
-      {
-        index: 0,
-        playerCard: createCardInstance('lane-guard', 'player', 'player-guard'),
-        opponentCard: createCardInstance('raider', 'opponent', 'opponent-raider')
-      },
-      {
-        index: 1,
-        playerCard: createCardInstance('archer', 'player', 'player-archer'),
-        opponentCard: null
-      },
-      {
-        index: 2,
-        playerCard: null,
-        opponentCard: null
-      }
-    ],
-    currentTurn: 'opponent',
-    round: 1,
-    winner: null,
-    lastAction: null
-  };
+function reorderDeck(baseDeck: readonly string[], front: string[]): string[] {
+  const remaining = [...baseDeck];
+  const ordered: string[] = [];
+
+  for (const cardId of front) {
+    const index = remaining.findIndex((entry) => entry === cardId);
+
+    if (index === -1) {
+      throw new Error(`Cannot reorder deck with missing card: ${cardId}`);
+    }
+
+    ordered.push(cardId);
+    remaining.splice(index, 1);
+  }
+
+  return [...ordered, ...remaining];
 }
 
-describe('game rules', () => {
-  it('resolves combat and hero damage across lanes', () => {
-    const resolved = resolveCombat(createCombatState());
+describe('sea vs forest rules', () => {
+  it('creates five lanes in the initial state', () => {
+    const state = createInitialState({ shuffle: false });
 
-    expect(resolved.lanes[0].playerCard?.currentHealth).toBe(1);
-    expect(resolved.lanes[0].opponentCard).toBeNull();
-    expect(resolved.players.opponent.heroHealth).toBe(28);
-    expect(resolved.players.opponent.discard).toHaveLength(1);
+    expect(state.lanes).toHaveLength(5);
   });
 
-  it('prevents placing a card into an occupied lane', () => {
-    const initial = createInitialState({ shuffle: false });
-    const firstCard = initial.players.player.hand[0];
-    const afterPlay = applyAction(initial, {
-      type: 'play-card',
-      playerId: 'player',
-      cardUid: firstCard.uid,
-      laneIndex: 0
-    });
+  it('allows only one play before reveal', () => {
+    const state = createInitialState({ shuffle: false });
+    const playerPlay = getLegalActions(state, 'player').find((action) => action.type === 'play-card');
 
-    const illegalAction = {
-      type: 'play-card' as const,
-      playerId: 'player' as const,
-      cardUid: afterPlay.players.player.hand[0].uid,
-      laneIndex: 0
-    };
+    if (!playerPlay || playerPlay.type !== 'play-card') {
+      throw new Error('Expected a legal play-card action.');
+    }
 
-    expect(getLegalActions(afterPlay)).not.toContainEqual(illegalAction);
-    expect(() => applyAction(afterPlay, illegalAction)).toThrow('Lane is already occupied.');
+    const afterPlay = applyAction(state, playerPlay);
+    const followup = getLegalActions(afterPlay, 'player');
+
+    expect(followup.filter((action) => action.type === 'play-card')).toHaveLength(0);
+    expect(followup.some((action) => action.type === 'end-turn')).toBe(true);
   });
 
-  it('draws cards without mutating the original state', () => {
-    const initial = createInitialState({ shuffle: false });
-    const drawn = drawCard(initial, 'player');
-
-    expect(initial.players.player.hand).toHaveLength(4);
-    expect(drawn.players.player.hand).toHaveLength(5);
-    expect(drawn.players.player.deck).toHaveLength(initial.players.player.deck.length - 1);
-  });
-
-  it('supports custom player deck definitions during setup', () => {
-    const reversedDeck = [...STARTING_DECK].reverse();
-    const initial = createInitialState({
+  it('resolves Current pushes using initiative order', () => {
+    const playerDeck = reorderDeck(STARTING_DECK, ['wave-lancer', 'reef-runner', 'tidal-school', 'mud-skipper']);
+    const opponentDeck = reorderDeck(OPPONENT_STARTING_DECK, ['thorn-stag', 'bark-warden', 'sapling-herder', 'bog-mystic']);
+    let state = createInitialState({
       shuffle: false,
-      playerDeckDefinition: reversedDeck
+      playerDeckDefinition: playerDeck,
+      opponentDeckDefinition: opponentDeck
     });
 
-    const expectedInitialHand = reversedDeck.slice(0, 4);
-    expect(initial.players.player.hand.map((card) => card.id)).toEqual(expectedInitialHand);
-  });
+    const lancer = state.players.player.hand.find((card) => card.id === 'wave-lancer');
+    const stag = state.players.opponent.hand.find((card) => card.id === 'thorn-stag');
 
-  it('spends mana when playing a card and keeps the card on the board', () => {
-    const initial = createInitialState({ shuffle: false });
-    const manaSprite = initial.players.player.hand.find((card) => card.id === 'mana-sprite') ?? initial.players.player.hand[0];
-    const updated = applyAction(initial, {
+    if (!lancer || !stag) {
+      throw new Error('Expected wave-lancer and thorn-stag in opening hands.');
+    }
+
+    state = applyAction(state, {
       type: 'play-card',
       playerId: 'player',
-      cardUid: manaSprite.uid,
+      cardUid: lancer.uid,
+      laneIndex: 2
+    });
+    state = applyAction(state, { type: 'end-turn', playerId: 'player' });
+    state = applyAction(state, {
+      type: 'play-card',
+      playerId: 'opponent',
+      cardUid: stag.uid,
+      laneIndex: 2
+    });
+    state = applyAction(state, { type: 'end-turn', playerId: 'opponent' });
+
+    expect(state.round).toBe(2);
+    expect(state.lanes[2].playerCard?.id).toBe('wave-lancer');
+    expect(state.lanes[3].opponentCard?.id).toBe('thorn-stag');
+  });
+
+  it('applies Drown on flooded terrain before combat', () => {
+    const playerDeck = reorderDeck(STARTING_DECK, ['drown-priest', 'wave-lancer', 'reef-runner', 'tidal-school']);
+    const opponentDeck = reorderDeck(OPPONENT_STARTING_DECK, ['thorn-stag', 'bark-warden', 'sapling-herder', 'bog-mystic']);
+    let state = createInitialState({
+      shuffle: false,
+      playerDeckDefinition: playerDeck,
+      opponentDeckDefinition: opponentDeck
+    });
+
+    const drownPriest = state.players.player.hand.find((card) => card.id === 'drown-priest');
+    const stag = state.players.opponent.hand.find((card) => card.id === 'thorn-stag');
+
+    if (!drownPriest || !stag) {
+      throw new Error('Expected drown-priest and thorn-stag in opening hands.');
+    }
+
+    state = applyAction(state, {
+      type: 'play-card',
+      playerId: 'player',
+      cardUid: drownPriest.uid,
       laneIndex: 1
     });
+    state = applyAction(state, { type: 'end-turn', playerId: 'player' });
+    state = applyAction(state, {
+      type: 'play-card',
+      playerId: 'opponent',
+      cardUid: stag.uid,
+      laneIndex: 1
+    });
+    state = applyAction(state, { type: 'end-turn', playerId: 'opponent' });
 
-    const expectedMana = initial.players.player.mana - manaSprite.cost + (manaSprite.effect?.type === 'gain-mana' ? manaSprite.effect.amount : 0);
-
-    expect(updated.players.player.mana).toBe(expectedMana);
-    expect(updated.lanes[1].playerCard?.uid).toBe(manaSprite.uid);
-    expect(updated.players.player.hand.some((card) => card.uid === manaSprite.uid)).toBe(false);
+    expect(state.lanes[1].terrain).toBe('flooded');
+    expect(state.lanes[1].opponentCard).toBeNull();
+    expect(state.players.opponent.discard.some((card) => card.id === 'thorn-stag')).toBe(true);
   });
 
-  it('detects when a hero has been defeated', () => {
-    const state = createCombatState();
-    state.players.opponent.heroHealth = 2;
+  it('grows units on overgrown terrain at end of turn', () => {
+    const playerDeck = reorderDeck(STARTING_DECK, ['thorn-stag', 'bark-warden', 'sapling-herder', 'grove-giant']);
+    const opponentDeck = reorderDeck(OPPONENT_STARTING_DECK, ['reef-runner', 'wave-lancer', 'mud-skipper', 'drown-priest']);
+    let state = createInitialState({
+      shuffle: false,
+      playerDeckDefinition: playerDeck,
+      opponentDeckDefinition: opponentDeck
+    });
 
-    const resolved = resolveCombat(state);
+    const stag = state.players.player.hand.find((card) => card.id === 'thorn-stag');
 
-    expect(checkWinCondition(resolved)).toBe('player');
-    expect(resolved.winner).toBe('player');
+    if (!stag) {
+      throw new Error('Expected thorn-stag in opening hand.');
+    }
+
+    state = applyAction(state, {
+      type: 'play-card',
+      playerId: 'player',
+      cardUid: stag.uid,
+      laneIndex: 0
+    });
+    state = applyAction(state, { type: 'end-turn', playerId: 'player' });
+    state = applyAction(state, { type: 'end-turn', playerId: 'opponent' });
+
+    expect(state.lanes[0].terrain).toBe('overgrown');
+    expect(state.lanes[0].playerCard?.attack).toBe(4);
+    expect(state.lanes[0].playerCard?.currentHealth).toBe(4);
   });
 });

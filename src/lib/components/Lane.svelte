@@ -11,10 +11,12 @@
   const dispatch = createEventDispatcher<{ laneSelected: { laneIndex: number } }>();
   $: laneState = getLaneWinner(lane);
   $: isSelectable = selectedCardUid !== null && lane.playerCard === null;
+  $: terrainLabel = lane.terrain ? lane.terrain : 'none';
 </script>
 
 <button class:selectable={isSelectable} class="lane" type="button" on:click={() => dispatch('laneSelected', { laneIndex: lane.index })}>
   <div class="lane__label">Lane {lane.index + 1}</div>
+  <div class="lane__terrain">Terrain: {terrainLabel}</div>
   <div class="lane__slot lane__slot--top">
     {#if lane.opponentCard}
       <Card card={lane.opponentCard} />

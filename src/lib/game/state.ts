@@ -1,11 +1,11 @@
-import { createDeck } from './cards';
+import { createDeck, OPPONENT_STARTING_DECK, STARTING_DECK } from './cards';
 import type { Card, GameState, Lane, PlayerId, PlayerState } from './types';
 
 export const HERO_HEALTH = 30;
 export const STARTING_MANA = 3;
 export const MAX_MANA = 10;
 export const STARTING_HAND_SIZE = 4;
-export const LANE_COUNT = 3;
+export const LANE_COUNT = 5;
 
 export interface InitialStateOptions {
   shuffle?: boolean;
@@ -21,9 +21,9 @@ function cloneCard(card: Card): Card {
 export function clonePlayer(player: PlayerState): PlayerState {
   return {
     ...player,
-    deck: player.deck.map(cloneCard),
-    hand: player.hand.map(cloneCard),
-    discard: player.discard.map(cloneCard)
+    deck: player.deck.map((card) => ({ ...cloneCard(card), keywords: card.keywords ? { ...card.keywords } : undefined })),
+    hand: player.hand.map((card) => ({ ...cloneCard(card), keywords: card.keywords ? { ...card.keywords } : undefined })),
+    discard: player.discard.map((card) => ({ ...cloneCard(card), keywords: card.keywords ? { ...card.keywords } : undefined }))
   };
 }
 
@@ -37,9 +37,11 @@ export function cloneState(state: GameState): GameState {
     lanes: state.lanes.map((lane) => ({
       ...lane,
       playerCard: lane.playerCard ? cloneCard(lane.playerCard) : null,
-      opponentCard: lane.opponentCard ? cloneCard(lane.opponentCard) : null
+      opponentCard: lane.opponentCard ? cloneCard(lane.opponentCard) : null,
+      pendingSeed: [...lane.pendingSeed]
     })),
-    lastAction: state.lastAction ? { ...state.lastAction } : null
+    lastAction: state.lastAction ? { ...state.lastAction } : null,
+    lanePlayCount: { ...state.lanePlayCount }
   };
 }
 
@@ -55,13 +57,15 @@ export function shuffleDeck<T>(cards: T[], rng: () => number = Math.random): T[]
 }
 
 function createPlayer(id: PlayerId, deckDefinition?: readonly string[]): PlayerState {
+  const fallbackDeck = id === 'player' ? STARTING_DECK : OPPONENT_STARTING_DECK;
+
   return {
     id,
     name: id === 'player' ? 'You' : 'AI Opponent',
     heroHealth: HERO_HEALTH,
     mana: STARTING_MANA,
     maxMana: STARTING_MANA,
-    deck: createDeck(id, deckDefinition),
+    deck: createDeck(id, deckDefinition ?? fallbackDeck),
     hand: [],
     discard: []
   };
@@ -70,8 +74,10 @@ function createPlayer(id: PlayerId, deckDefinition?: readonly string[]): PlayerS
 function createLanes(): Lane[] {
   return Array.from({ length: LANE_COUNT }, (_, index) => ({
     index,
+    terrain: null,
     playerCard: null,
-    opponentCard: null
+    opponentCard: null,
+    pendingSeed: []
   }));
 }
 
@@ -105,7 +111,11 @@ export function createInitialState(options: InitialStateOptions = {}): GameState
     currentTurn: 'player',
     round: 1,
     winner: null,
-    lastAction: null
+    lastAction: null,
+    lanePlayCount: {
+      player: 0,
+      opponent: 0
+    }
   };
 
   if (shuffle) {

@@ -27,6 +27,14 @@
     card,
     copies: copiesByCardId[card.id]
   }));
+  $: keywordTextByCardId = CARD_LIBRARY.reduce<Record<string, string>>((acc, card) => {
+    const keywords = Object.entries(card.keywords ?? {})
+      .filter(([, value]) => Boolean(value))
+      .map(([keyword, value]) => `${keyword}${typeof value === 'number' ? ` ${value}` : ''}`);
+
+    acc[card.id] = keywords.join(', ');
+    return acc;
+  }, {});
 
   $: if (selectedCardUid && !state.players.player.hand.some((card) => card.uid === selectedCardUid)) {
     selectedCardUid = null;
@@ -140,9 +148,9 @@
     <div>
       <h1>cardlane</h1>
       {#if mode === 'battle'}
-        <p>Round {state.round} · Combat resolves after both sides finish their turn.</p>
+        <p>Round {state.round} · Reveal → moves → pushes → combat → growth.</p>
       {:else}
-        <p>Build your deck before the match starts.</p>
+        <p>Build your Sea-vs-Forest deck before the match starts.</p>
       {/if}
     </div>
     <div class="page__actions">
@@ -187,7 +195,7 @@
   {:else}
     <section class="status">
       <strong>Deck size: {deckCardCount}/{DECK_SIZE}</strong>
-      <span>Use up to {MAX_COPIES_PER_CARD} copies per card.</span>
+      <span>Use up to {MAX_COPIES_PER_CARD} copies per card across five lanes.</span>
     </section>
 
     <section class="deckbuilder" aria-label="Deckbuilder">
@@ -199,17 +207,19 @@
             {@const canAdd = copies < MAX_COPIES_PER_CARD && deckCardCount < DECK_SIZE}
             <article class="library-card">
               <header>
-                <strong>{card.name}</strong>
+                <strong>{card.art} {card.name}</strong>
                 <span>Cost {card.cost}</span>
               </header>
               <div class="library-card__stats">
+                <span>{card.faction === 'sea' ? 'Sea' : 'Forest'}</span>
                 <span>⚔ {card.attack}</span>
                 <span>❤ {card.health}</span>
               </div>
-              {#if card.effect}
-                <p>
-                  {card.effect.type === 'damage-enemy-hero' ? 'Deal 1 to enemy hero' : 'Gain 1 mana'}
-                </p>
+              {#if card.createsTerrain}
+                <p>Creates {card.createsTerrain} terrain.</p>
+              {/if}
+              {#if keywordTextByCardId[card.id]}
+                <p>Keywords: {keywordTextByCardId[card.id]}</p>
               {/if}
               <footer>
                 <span>{copies}/{MAX_COPIES_PER_CARD}</span>

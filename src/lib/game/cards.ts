@@ -1,35 +1,150 @@
 import type { Card, CardDefinition, PlayerId } from './types';
 
 export const CARD_LIBRARY: CardDefinition[] = [
-  { id: 'footman', name: 'Footman', cost: 1, attack: 1, health: 3 },
-  { id: 'archer', name: 'Archer', cost: 2, attack: 2, health: 2 },
-  { id: 'squire', name: 'Squire', cost: 1, attack: 2, health: 1 },
-  { id: 'shieldbearer', name: 'Shieldbearer', cost: 2, attack: 1, health: 4 },
-  { id: 'fire-imp', name: 'Fire Imp', cost: 2, attack: 2, health: 1, effect: { type: 'damage-enemy-hero', amount: 1 } },
-  { id: 'mana-sprite', name: 'Mana Sprite', cost: 2, attack: 1, health: 2, effect: { type: 'gain-mana', amount: 1 } },
-  { id: 'raider', name: 'Raider', cost: 3, attack: 3, health: 2 },
-  { id: 'lane-guard', name: 'Lane Guard', cost: 3, attack: 2, health: 4 },
-  { id: 'charger', name: 'Charger', cost: 4, attack: 4, health: 2 },
-  { id: 'battle-mage', name: 'Battle Mage', cost: 4, attack: 3, health: 3, effect: { type: 'damage-enemy-hero', amount: 1 } },
-  { id: 'knight', name: 'Knight', cost: 5, attack: 4, health: 5 },
-  { id: 'colossus', name: 'Colossus', cost: 6, attack: 6, health: 6 }
+  {
+    id: 'reef-runner',
+    name: 'Reef Runner',
+    art: '🐟',
+    faction: 'sea',
+    cost: 1,
+    attack: 1,
+    health: 2,
+    keywords: { school: true, tide: true },
+    createsTerrain: 'flooded'
+  },
+  {
+    id: 'wave-lancer',
+    name: 'Wave Lancer',
+    art: '🪼',
+    faction: 'sea',
+    cost: 2,
+    attack: 2,
+    health: 2,
+    keywords: { current: 1, surge: 1 },
+    createsTerrain: 'flooded'
+  },
+  {
+    id: 'drown-priest',
+    name: 'Drown Priest',
+    art: '🐙',
+    faction: 'sea',
+    cost: 3,
+    attack: 2,
+    health: 3,
+    keywords: { drown: true, tide: true },
+    createsTerrain: 'flooded'
+  },
+  {
+    id: 'mud-skipper',
+    name: 'Mud Skipper',
+    art: '🦀',
+    faction: 'sea',
+    cost: 2,
+    attack: 2,
+    health: 2,
+    keywords: { current: 1 },
+    createsTerrain: 'mud'
+  },
+  {
+    id: 'tidal-school',
+    name: 'Tidal School',
+    art: '🐠',
+    faction: 'sea',
+    cost: 3,
+    attack: 2,
+    health: 3,
+    keywords: { school: true, surge: 1, tide: true },
+    createsTerrain: 'flooded'
+  },
+  {
+    id: 'bark-warden',
+    name: 'Bark Warden',
+    art: '🪵',
+    faction: 'forest',
+    cost: 2,
+    attack: 1,
+    health: 4,
+    keywords: { rooted: true, canopy: true },
+    createsTerrain: 'overgrown'
+  },
+  {
+    id: 'thorn-stag',
+    name: 'Thorn Stag',
+    art: '🦌',
+    faction: 'forest',
+    cost: 3,
+    attack: 3,
+    health: 3,
+    keywords: { thorns: 1, grow: true },
+    createsTerrain: 'overgrown'
+  },
+  {
+    id: 'sapling-herder',
+    name: 'Sapling Herder',
+    art: '🌱',
+    faction: 'forest',
+    cost: 2,
+    attack: 1,
+    health: 2,
+    keywords: { seed: true, grow: true },
+    createsTerrain: 'overgrown'
+  },
+  {
+    id: 'grove-giant',
+    name: 'Grove Giant',
+    art: '🌳',
+    faction: 'forest',
+    cost: 4,
+    attack: 3,
+    health: 5,
+    keywords: { rooted: true, thorns: 1 },
+    createsTerrain: 'overgrown'
+  },
+  {
+    id: 'bog-mystic',
+    name: 'Bog Mystic',
+    art: '🍄',
+    faction: 'forest',
+    cost: 3,
+    attack: 2,
+    health: 3,
+    keywords: { grow: true, canopy: true },
+    createsTerrain: 'mud'
+  }
 ];
 
 export const STARTING_DECK = [
-  'footman',
-  'footman',
-  'squire',
-  'shieldbearer',
-  'archer',
-  'archer',
-  'fire-imp',
-  'mana-sprite',
-  'raider',
-  'lane-guard',
-  'charger',
-  'battle-mage',
-  'knight',
-  'colossus'
+  'reef-runner',
+  'reef-runner',
+  'wave-lancer',
+  'wave-lancer',
+  'drown-priest',
+  'mud-skipper',
+  'mud-skipper',
+  'tidal-school',
+  'tidal-school',
+  'bark-warden',
+  'bark-warden',
+  'thorn-stag',
+  'sapling-herder',
+  'grove-giant'
+] as const;
+
+export const OPPONENT_STARTING_DECK = [
+  'bark-warden',
+  'bark-warden',
+  'thorn-stag',
+  'thorn-stag',
+  'sapling-herder',
+  'sapling-herder',
+  'grove-giant',
+  'grove-giant',
+  'bog-mystic',
+  'bog-mystic',
+  'reef-runner',
+  'wave-lancer',
+  'mud-skipper',
+  'drown-priest'
 ] as const;
 
 export const DECK_SIZE = STARTING_DECK.length;
@@ -54,7 +169,8 @@ export function createCardInstance(cardId: string, owner: PlayerId, uid?: string
     ...definition,
     owner,
     uid: uid ?? `${owner}-${cardId}-${crypto.randomUUID()}`,
-    currentHealth: definition.health
+    currentHealth: definition.health,
+    enteredThisRound: false
   };
 }
 

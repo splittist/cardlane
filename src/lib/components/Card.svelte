@@ -5,10 +5,20 @@
   export let playable = false;
   export let selected = false;
 
-  const effectLabels: Record<string, string> = {
-    'damage-enemy-hero': 'Deal 1 to enemy hero',
-    'gain-mana': 'Gain 1 mana'
+  const keywordLabels: Record<string, string> = {
+    current: 'Current',
+    school: 'School',
+    tide: 'Tide',
+    surge: 'Surge',
+    drown: 'Drown',
+    rooted: 'Rooted',
+    grow: 'Grow',
+    canopy: 'Canopy',
+    thorns: 'Thorns',
+    seed: 'Seed'
   };
+
+  $: keywordEntries = Object.entries(card.keywords ?? {}).filter(([, value]) => Boolean(value));
 </script>
 
 <div class:selected class:playable class="card">
@@ -16,12 +26,23 @@
     <span class="card__name">{card.name}</span>
     <span class="card__cost">{card.cost}</span>
   </div>
+  <div class="card__art" aria-hidden="true">
+    <svg viewBox="0 0 48 48" role="img">
+      <text x="50%" y="58%" text-anchor="middle" font-size="28">{card.art}</text>
+    </svg>
+  </div>
   <div class="card__stats">
     <span>⚔ {card.attack}</span>
     <span>❤ {card.currentHealth}</span>
   </div>
-  {#if card.effect}
-    <p class="card__effect">{effectLabels[card.effect.type]}</p>
+  {#if keywordEntries.length > 0}
+    <div class="card__keywords">
+      {#each keywordEntries as [keyword, value] (keyword)}
+        <span>
+          {keywordLabels[keyword] ?? keyword}{typeof value === 'number' ? ` ${value}` : ''}
+        </span>
+      {/each}
+    </div>
   {/if}
 </div>
 
@@ -56,6 +77,17 @@
     gap: 0.5rem;
   }
 
+  .card__art {
+    display: grid;
+    place-items: center;
+    min-height: 2.6rem;
+  }
+
+  .card__art svg {
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+
   .card__name {
     font-weight: 700;
   }
@@ -70,9 +102,17 @@
     font-weight: 700;
   }
 
-  .card__effect {
-    margin: 0;
-    font-size: 0.8rem;
-    color: #c9d7ff;
+  .card__keywords {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .card__keywords span {
+    border: 1px solid #4662a0;
+    border-radius: 999px;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.72rem;
+    color: #d7e4ff;
   }
 </style>

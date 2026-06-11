@@ -67,7 +67,7 @@
 
   @media (min-width: 700px) {
     .board__lanes {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
     }
   }
 </style>

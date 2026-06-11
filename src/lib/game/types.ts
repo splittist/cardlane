@@ -1,29 +1,38 @@
 export type PlayerId = 'player' | 'opponent';
 export type Winner = PlayerId | 'draw' | null;
+export type Faction = 'sea' | 'forest';
+export type TerrainType = 'flooded' | 'overgrown' | 'mud';
 
-export type CardEffect =
-  | {
-      type: 'damage-enemy-hero';
-      amount: number;
-    }
-  | {
-      type: 'gain-mana';
-      amount: number;
-    };
+export interface CardKeywords {
+  current?: number;
+  school?: boolean;
+  tide?: boolean;
+  surge?: number;
+  drown?: boolean;
+  rooted?: boolean;
+  grow?: boolean;
+  canopy?: boolean;
+  thorns?: number;
+  seed?: boolean;
+}
 
 export interface CardDefinition {
   id: string;
   name: string;
+  art: string;
+  faction: Faction;
   cost: number;
   attack: number;
   health: number;
-  effect?: CardEffect;
+  keywords?: CardKeywords;
+  createsTerrain?: TerrainType;
 }
 
 export interface Card extends CardDefinition {
   uid: string;
   owner: PlayerId;
   currentHealth: number;
+  enteredThisRound: boolean;
 }
 
 export interface PlayerState {
@@ -39,8 +48,10 @@ export interface PlayerState {
 
 export interface Lane {
   index: number;
+  terrain: TerrainType | null;
   playerCard: Card | null;
   opponentCard: Card | null;
+  pendingSeed: PlayerId[];
 }
 
 export interface GameState {
@@ -50,6 +61,7 @@ export interface GameState {
   round: number;
   winner: Winner;
   lastAction: Action | null;
+  lanePlayCount: Record<PlayerId, number>;
 }
 
 export type PlayCardAction = {

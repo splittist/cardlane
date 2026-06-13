@@ -570,8 +570,9 @@ function startNextRound(state: GameState): GameState {
 		player.mana = player.maxMana;
 	}
 
-	let withDraw = drawCard(nextState, 'player');
-	withDraw = drawCard(withDraw, 'opponent');
+	let withDraw = applyRoundDraw(nextState, 'player');
+	withDraw = applyRoundDraw(withDraw, 'opponent');
+	withDraw.winner = checkWinCondition(withDraw);
 	withDraw.round += 1;
 	withDraw.currentTurn = 'player';
 	withDraw.phase = 'planning';
@@ -582,6 +583,16 @@ function startNextRound(state: GameState): GameState {
 	};
 
 	return withDraw;
+}
+
+function applyRoundDraw(state: GameState, playerId: PlayerId): GameState {
+	if (state.players[playerId].deck.length === 0) {
+		const nextState = cloneState(state);
+		nextState.players[playerId].heroHealth -= 1;
+		return nextState;
+	}
+
+	return drawCard(state, playerId);
 }
 
 function buildResolutionStep(label: string, state: GameState): ResolutionStep {

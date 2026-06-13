@@ -13,6 +13,7 @@ The game is still a prototype, but it has moved beyond repo setup notes: you can
 - Simple AI that chooses from legal opponent actions.
 - Face-down planning phase followed by an explicit reveal step.
 - Staged round playback for reveal, movement, pushes, drown effects, combat, growth, and next-round setup.
+- Deck exhaustion fatigue: a hero takes 1 damage when they cannot draw for the next round.
 - Keyword descriptions in the deckbuilder and tooltips on card keyword chips.
 - Pure TypeScript game state, rules, selectors, card definitions, and AI helpers under `src/lib/game`.
 - Unit tests for lane setup, legal action handling, reveal timing, terrain, keyword interactions, staged resolution snapshots, and combat-adjacent effects.
@@ -108,7 +109,7 @@ Round resolution currently runs in this order:
 4. Resolve Drown effects.
 5. Resolve combat and hero damage.
 6. Resolve Growth effects.
-7. Draw cards, refresh mana, and start the next round.
+7. Refresh mana, draw cards, apply deck exhaustion fatigue, and start the next round.
 
 The current card mechanics include faction terrain, Flooded, Overgrown, Mud, Current, School, Tide, Surge, Drown, Rooted, Grow, Canopy, Thorns, and Seed. Terrain and keyword behavior is implemented in `src/lib/game/rules.ts`.
 
@@ -121,7 +122,7 @@ Most gameplay objects are immutable from the caller's perspective: public rule h
 ## Areas for improvement
 
 - Add a fuller rules reference or glossary view beyond inline keyword descriptions.
-- Expand tests for remaining edge cases around simultaneous deaths, deck exhaustion, seed spawning conflicts, blocked movement, and win conditions.
+- Expand tests for remaining edge cases around simultaneous deaths, seed spawning conflicts, blocked movement, and win conditions.
 - Improve AI beyond random legal plays so it considers mana efficiency, lane pressure, lethal damage, and terrain synergies.
 - Add more visual feedback and accessibility polish for selected cards, legal lanes, reveal steps, and disabled actions.
 - Persist deckbuilder choices locally so custom decks survive a refresh.

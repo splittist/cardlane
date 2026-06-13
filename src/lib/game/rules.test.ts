@@ -297,4 +297,83 @@ describe('sea vs forest rules', () => {
 		expect(steps[3].state.lanes[1].opponentCard).toBeNull();
 		expect(steps[steps.length - 1].state).toEqual(finalState);
 	});
+
+	it('damages a hero that cannot draw for the next round', () => {
+		let state = createInitialState({ shuffle: false });
+		const runner = state.players.player.hand.find(
+			(card) => card.id === 'reef-runner'
+		);
+
+		if (!runner) {
+			throw new Error('Expected reef-runner in opening hand.');
+		}
+
+		state = applyAction(state, {
+			type: 'play-card',
+			playerId: 'player',
+			cardUid: runner.uid,
+			laneIndex: 0
+		});
+		state.players.player.deck = [];
+		state.players.player.heroHealth = 10;
+		state = applyAction(state, { type: 'end-turn', playerId: 'player' });
+		state = revealAfterBothPlayersLock(state);
+
+		expect(state.round).toBe(2);
+		expect(state.players.player.heroHealth).toBe(9);
+		expect(state.winner).toBeNull();
+	});
+
+	it('allows simultaneous deck exhaustion to end in a draw', () => {
+		const playerDeck = reorderDeck(STARTING_DECK, [
+			'reef-runner',
+			'wave-lancer',
+			'drown-priest',
+			'mud-skipper'
+		]);
+		const opponentDeck = reorderDeck(OPPONENT_STARTING_DECK, [
+			'bark-warden',
+			'thorn-stag',
+			'sapling-herder',
+			'bog-mystic'
+		]);
+		let state = createInitialState({
+			shuffle: false,
+			playerDeckDefinition: playerDeck,
+			opponentDeckDefinition: opponentDeck
+		});
+		const runner = state.players.player.hand.find(
+			(card) => card.id === 'reef-runner'
+		);
+		const warden = state.players.opponent.hand.find(
+			(card) => card.id === 'bark-warden'
+		);
+
+		if (!runner || !warden) {
+			throw new Error('Expected reef-runner and bark-warden in opening hands.');
+		}
+
+		state = applyAction(state, {
+			type: 'play-card',
+			playerId: 'player',
+			cardUid: runner.uid,
+			laneIndex: 2
+		});
+		state = applyAction(state, { type: 'end-turn', playerId: 'player' });
+		state = applyAction(state, {
+			type: 'play-card',
+			playerId: 'opponent',
+			cardUid: warden.uid,
+			laneIndex: 2
+		});
+		state.players.player.deck = [];
+		state.players.opponent.deck = [];
+		state.players.player.heroHealth = 1;
+		state.players.opponent.heroHealth = 1;
+		state = revealAfterBothPlayersLock(state);
+
+		expect(state.players.player.heroHealth).toBe(0);
+		expect(state.players.opponent.heroHealth).toBe(0);
+		expect(state.winner).toBe('draw');
+	});
 });

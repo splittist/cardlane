@@ -8,128 +8,169 @@ export const STARTING_HAND_SIZE = 4;
 export const LANE_COUNT = 5;
 
 export interface InitialStateOptions {
-  shuffle?: boolean;
-  rng?: () => number;
-  playerDeckDefinition?: readonly string[];
-  opponentDeckDefinition?: readonly string[];
+	shuffle?: boolean;
+	rng?: () => number;
+	playerDeckDefinition?: readonly string[];
+	opponentDeckDefinition?: readonly string[];
 }
 
 function cloneCard(card: Card): Card {
-  return { ...card };
+	return { ...card };
 }
 
 export function clonePlayer(player: PlayerState): PlayerState {
-  return {
-    ...player,
-    deck: player.deck.map((card) => ({ ...cloneCard(card), keywords: card.keywords ? { ...card.keywords } : undefined })),
-    hand: player.hand.map((card) => ({ ...cloneCard(card), keywords: card.keywords ? { ...card.keywords } : undefined })),
-    discard: player.discard.map((card) => ({ ...cloneCard(card), keywords: card.keywords ? { ...card.keywords } : undefined }))
-  };
+	return {
+		...player,
+		deck: player.deck.map((card) => ({
+			...cloneCard(card),
+			keywords: card.keywords ? { ...card.keywords } : undefined
+		})),
+		hand: player.hand.map((card) => ({
+			...cloneCard(card),
+			keywords: card.keywords ? { ...card.keywords } : undefined
+		})),
+		discard: player.discard.map((card) => ({
+			...cloneCard(card),
+			keywords: card.keywords ? { ...card.keywords } : undefined
+		}))
+	};
 }
 
 export function cloneState(state: GameState): GameState {
-  return {
-    ...state,
-    players: {
-      player: clonePlayer(state.players.player),
-      opponent: clonePlayer(state.players.opponent)
-    },
-    lanes: state.lanes.map((lane) => ({
-      ...lane,
-      playerCard: lane.playerCard ? cloneCard(lane.playerCard) : null,
-      opponentCard: lane.opponentCard ? cloneCard(lane.opponentCard) : null,
-      pendingSeed: [...lane.pendingSeed]
-    })),
-    lastAction: state.lastAction ? { ...state.lastAction } : null,
-    phase: state.phase,
-    pendingReveal: {
-      player: state.pendingReveal.player.map((entry) => ({ ...entry, card: cloneCard(entry.card) })),
-      opponent: state.pendingReveal.opponent.map((entry) => ({ ...entry, card: cloneCard(entry.card) }))
-    }
-  };
+	return {
+		...state,
+		players: {
+			player: clonePlayer(state.players.player),
+			opponent: clonePlayer(state.players.opponent)
+		},
+		lanes: state.lanes.map((lane) => ({
+			...lane,
+			playerCard: lane.playerCard ? cloneCard(lane.playerCard) : null,
+			opponentCard: lane.opponentCard ? cloneCard(lane.opponentCard) : null,
+			pendingSeed: [...lane.pendingSeed]
+		})),
+		lastAction: state.lastAction ? { ...state.lastAction } : null,
+		phase: state.phase,
+		pendingReveal: {
+			player: state.pendingReveal.player.map((entry) => ({
+				...entry,
+				card: cloneCard(entry.card)
+			})),
+			opponent: state.pendingReveal.opponent.map((entry) => ({
+				...entry,
+				card: cloneCard(entry.card)
+			}))
+		}
+	};
 }
 
-export function shuffleDeck<T>(cards: T[], rng: () => number = Math.random): T[] {
-  const shuffled = [...cards];
+export function shuffleDeck<T>(
+	cards: T[],
+	rng: () => number = Math.random
+): T[] {
+	const shuffled = [...cards];
 
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(rng() * (index + 1));
-    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
-  }
+	for (let index = shuffled.length - 1; index > 0; index -= 1) {
+		const swapIndex = Math.floor(rng() * (index + 1));
+		[shuffled[index], shuffled[swapIndex]] = [
+			shuffled[swapIndex],
+			shuffled[index]
+		];
+	}
 
-  return shuffled;
+	return shuffled;
 }
 
-function createPlayer(id: PlayerId, deckDefinition?: readonly string[]): PlayerState {
-  const fallbackDeck = id === 'player' ? STARTING_DECK : OPPONENT_STARTING_DECK;
+function createPlayer(
+	id: PlayerId,
+	deckDefinition?: readonly string[]
+): PlayerState {
+	const fallbackDeck = id === 'player' ? STARTING_DECK : OPPONENT_STARTING_DECK;
 
-  return {
-    id,
-    name: id === 'player' ? 'You' : 'AI Opponent',
-    heroHealth: HERO_HEALTH,
-    mana: STARTING_MANA,
-    maxMana: STARTING_MANA,
-    deck: createDeck(id, deckDefinition ?? fallbackDeck),
-    hand: [],
-    discard: []
-  };
+	return {
+		id,
+		name: id === 'player' ? 'You' : 'AI Opponent',
+		heroHealth: HERO_HEALTH,
+		mana: STARTING_MANA,
+		maxMana: STARTING_MANA,
+		deck: createDeck(id, deckDefinition ?? fallbackDeck),
+		hand: [],
+		discard: []
+	};
 }
 
 function createLanes(): Lane[] {
-  return Array.from({ length: LANE_COUNT }, (_, index) => ({
-    index,
-    terrain: null,
-    playerCard: null,
-    opponentCard: null,
-    pendingSeed: []
-  }));
+	return Array.from({ length: LANE_COUNT }, (_, index) => ({
+		index,
+		terrain: null,
+		playerCard: null,
+		opponentCard: null,
+		pendingSeed: []
+	}));
 }
 
-export function drawCard(state: GameState, playerId: PlayerId, count = 1): GameState {
-  const nextState = cloneState(state);
-  const player = nextState.players[playerId];
+export function drawCard(
+	state: GameState,
+	playerId: PlayerId,
+	count = 1
+): GameState {
+	const nextState = cloneState(state);
+	const player = nextState.players[playerId];
 
-  for (let drawIndex = 0; drawIndex < count; drawIndex += 1) {
-    const [nextCard, ...remainingDeck] = player.deck;
+	for (let drawIndex = 0; drawIndex < count; drawIndex += 1) {
+		const [nextCard, ...remainingDeck] = player.deck;
 
-    if (!nextCard) {
-      break;
-    }
+		if (!nextCard) {
+			break;
+		}
 
-    player.deck = remainingDeck;
-    player.hand = [...player.hand, nextCard];
-  }
+		player.deck = remainingDeck;
+		player.hand = [...player.hand, nextCard];
+	}
 
-  return nextState;
+	return nextState;
 }
 
-export function createInitialState(options: InitialStateOptions = {}): GameState {
-  const { shuffle = true, rng = Math.random, playerDeckDefinition, opponentDeckDefinition } = options;
+export function createInitialState(
+	options: InitialStateOptions = {}
+): GameState {
+	const {
+		shuffle = true,
+		rng = Math.random,
+		playerDeckDefinition,
+		opponentDeckDefinition
+	} = options;
 
-  const initialState: GameState = {
-    players: {
-      player: createPlayer('player', playerDeckDefinition),
-      opponent: createPlayer('opponent', opponentDeckDefinition)
-    },
-    lanes: createLanes(),
-    currentTurn: 'player',
-    phase: 'planning',
-    round: 1,
-    winner: null,
-    lastAction: null,
-    pendingReveal: {
-      player: [],
-      opponent: []
-    }
-  };
+	const initialState: GameState = {
+		players: {
+			player: createPlayer('player', playerDeckDefinition),
+			opponent: createPlayer('opponent', opponentDeckDefinition)
+		},
+		lanes: createLanes(),
+		currentTurn: 'player',
+		phase: 'planning',
+		round: 1,
+		winner: null,
+		lastAction: null,
+		pendingReveal: {
+			player: [],
+			opponent: []
+		}
+	};
 
-  if (shuffle) {
-    initialState.players.player.deck = shuffleDeck(initialState.players.player.deck, rng);
-    initialState.players.opponent.deck = shuffleDeck(initialState.players.opponent.deck, rng);
-  }
+	if (shuffle) {
+		initialState.players.player.deck = shuffleDeck(
+			initialState.players.player.deck,
+			rng
+		);
+		initialState.players.opponent.deck = shuffleDeck(
+			initialState.players.opponent.deck,
+			rng
+		);
+	}
 
-  let stateWithHands = drawCard(initialState, 'player', STARTING_HAND_SIZE);
-  stateWithHands = drawCard(stateWithHands, 'opponent', STARTING_HAND_SIZE);
+	let stateWithHands = drawCard(initialState, 'player', STARTING_HAND_SIZE);
+	stateWithHands = drawCard(stateWithHands, 'opponent', STARTING_HAND_SIZE);
 
-  return stateWithHands;
+	return stateWithHands;
 }

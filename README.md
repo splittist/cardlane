@@ -1,75 +1,141 @@
 # cardlane
 
-Lane Card Game Repo Setup
+cardlane is a SvelteKit and TypeScript prototype for a lane-based card battler. It currently has a playable single-player loop against a simple AI opponent, a lightweight deckbuilder, a pure TypeScript rules engine, and Vitest coverage for the core game flow.
 
-This project is a small SvelteKit/TypeScript web app for building a lane-based card battler playable on phones over a home network. The first goal is a single-player prototype with a simple AI opponent. Local multiplayer can be added later once the rules engine is stable.
+The game is still a prototype, but it has moved beyond repo setup notes: you can build a 14-card deck, queue cards face-down into five lanes, lock turns, reveal both sides, resolve lane effects, and play until a hero wins.
 
-Technical approach
+## Current features
 
-Use SvelteKit for the web app, TypeScript for both UI and game logic, and Vitest for testing the rules engine. The core game should be written as framework-independent TypeScript so that the rules, card definitions, and AI are not tightly coupled to Svelte components.
+- Mobile-friendly Svelte UI with deckbuilder and battle modes.
+- Five-lane board with separate player and opponent slots.
+- Fixed card library with Sea and Forest factions.
+- Custom player deck selection with a 14-card deck size and a maximum of 2 copies per card.
+- Simple AI that chooses from legal opponent actions.
+- Face-down planning phase followed by an explicit reveal step.
+- Staged round playback for reveal, movement, pushes, drown effects, combat, growth, and next-round setup.
+- Pure TypeScript game state, rules, selectors, card definitions, and AI helpers under `src/lib/game`.
+- Unit tests for lane setup, legal action handling, reveal timing, terrain, keyword interactions, staged resolution snapshots, and combat-adjacent effects.
 
-The UI should render game state and dispatch player actions. It should not contain the rules themselves. The game engine should be responsible for validating legal actions, applying those actions, resolving combat, and returning the next game state.
+## Tech stack
 
-Suggested tooling
+- SvelteKit
+- Svelte 5
+- TypeScript
+- Vite
+- Vitest
+- ESLint
+- Prettier
 
-The initial tooling should be:
+## Getting started
 
-* SvelteKit
-* TypeScript
-* Vite
-* Vitest
-* ESLint / Prettier
-* JSON or TypeScript card definitions
-* Optional later: PWA support
-* Optional later: Node/WebSocket server for two-player home-network play
+Install dependencies:
 
-Suggested project skeleton
+```sh
+npm install
+```
 
+Run the development server:
+
+```sh
+npm run dev
+```
+
+Run the test suite:
+
+```sh
+npm test
+```
+
+Run type and Svelte checks:
+
+```sh
+npm run check
+```
+
+Run linting and formatting checks:
+
+```sh
+npm run lint
+```
+
+Build for production:
+
+```sh
+npm run build
+```
+
+Preview a production build:
+
+```sh
+npm run preview
+```
+
+## Project structure
+
+```text
 src/
   lib/
-    game/
-      cards.ts          # Card definitions
-      types.ts          # Core types: Card, Player, Lane, GameState, Action
-      state.ts          # Initial state, deck setup, draw/shuffle helpers
-      rules.ts          # Legal moves, action resolution, combat
-      ai.ts             # Simple opponent logic
-      selectors.ts      # Derived views: playable cards, occupied lanes, etc.
-      rules.test.ts     # Unit tests for the rules engine
     components/
-      Board.svelte
-      Lane.svelte
-      Card.svelte
-      Hand.svelte
-      HeroPanel.svelte
+      Board.svelte          Battle board layout
+      Card.svelte           Visible card presentation
+      FaceDownCard.svelte   Queued card back
+      Hand.svelte           Player hand
+      HeroPanel.svelte      Hero health and mana
+      Lane.svelte           Lane slot and terrain UI
+    game/
+      ai.ts                 Simple legal-action AI
+      cards.ts              Card library and deck validation
+      rules.ts              Legal actions and round resolution
+      rules.test.ts         Rules engine tests
+      selectors.ts          Derived game-state helpers
+      state.ts              Initial state, cloning, draw, shuffle
+      types.ts              Core game types
   routes/
-    +page.svelte        # Main game screen
+    +page.svelte            Deckbuilder and main game screen
+```
 
-Implementation principles
+## Gameplay model
 
-Start with a deliberately small game:
+Each player starts with 30 hero health, 3 mana, a 14-card deck, and a 4-card hand. Mana increases by 1 each round up to 10. Both players queue cards into lanes during planning, then the round pauses until the reveal button is pressed.
 
-* 3 lanes rather than 5.
-* Fixed decks.
-* 10–15 cards per side.
-* Basic attack/health/cost cards.
-* One or two simple effects only.
-* A very simple AI opponent.
-* No deckbuilding, accounts, animations, or multiplayer at first.
+Round resolution currently runs in this order:
 
-The first milestone is not polish. It is a complete loop: draw cards, play cards into lanes, end turn, resolve combat, and determine a winner.
+1. Reveal queued cards.
+2. Resolve Tide movement.
+3. Resolve Current pushes.
+4. Resolve Drown effects.
+5. Resolve combat and hero damage.
+6. Resolve Growth effects.
+7. Draw cards, refresh mana, and start the next round.
 
-The most important design rule is to keep the game engine pure and testable. A player action should look something like “play this card into this lane,” and the rules engine should decide whether that action is legal and what the resulting game state should be.
+The current card mechanics include faction terrain, Flooded, Overgrown, Mud, Current, School, Tide, Surge, Drown, Rooted, Grow, Canopy, Thorns, and Seed. Terrain and keyword behavior is implemented in `src/lib/game/rules.ts`.
 
-Development order
+## Architecture notes
 
-First, create the SvelteKit project and confirm it runs locally. Then build the game model in plain TypeScript before spending much time on UI. Add unit tests for combat, lane placement, drawing cards, resource spending, and win/loss conditions.
+The rules engine is intentionally separate from Svelte. UI components render `GameState` and dispatch player intentions, while `rules.ts` validates actions and returns the next state. This keeps game behavior testable without a browser and makes it easier to add better AI, multiplayer, or alternate front ends later.
 
-Once the rules engine works, create a simple mobile-first board UI. Cards can initially be plain rectangles with text. Art and animation should wait until the game is already playable.
+Most gameplay objects are immutable from the caller's perspective: public rule helpers clone state before applying changes. The resolver also exposes staged snapshots through `getRoundResolutionSteps`, which the Svelte UI uses for reveal playback.
 
-After the single-player version works, add a simple AI that chooses from legal actions. Only after that should local multiplayer be considered.
+## Areas for improvement
 
-Future multiplayer direction
+- Add clearer in-game keyword help so players can understand card text without reading source code.
+- Expand tests for remaining edge cases around simultaneous deaths, deck exhaustion, seed spawning conflicts, blocked movement, and win conditions.
+- Improve AI beyond random legal plays so it considers mana efficiency, lane pressure, lethal damage, and terrain synergies.
+- Add more visual feedback and accessibility polish for selected cards, legal lanes, reveal steps, and disabled actions.
+- Persist deckbuilder choices locally so custom decks survive a refresh.
+- Consider extracting deckbuilder state and battle orchestration from `+page.svelte` as the UI grows.
+- Add regression coverage for Svelte interactions with component tests or browser-level tests.
+- Review card balance now that the game has five lanes, multiple plays per turn, and several scaling mechanics.
 
-For multiplayer, the preferred later approach is local network play using a small server and WebSockets. One device can host or both devices can connect to a server running on the home network. The multiplayer model should sync player actions and authoritative game state, not UI events.
+## Future work
 
-This will be much easier if the rules engine has already been kept separate from the Svelte UI.
+- More cards, factions, and effect types once the current rules are stable.
+- Better onboarding, rules reference, and match summary screens.
+- Animation and audio polish after the core loop feels good.
+- PWA support for easier phone play on a home network.
+- Local multiplayer with an authoritative server and WebSockets. The likely model is to sync player actions and canonical game state, not UI events.
+- Optional deck import/export or saved deck presets.
+
+## License
+
+MIT. See `LICENSE`.

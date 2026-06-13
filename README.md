@@ -13,6 +13,7 @@ The game is still a prototype, but it has moved beyond repo setup notes: you can
 - Simple AI that chooses from legal opponent actions.
 - Face-down planning phase followed by an explicit reveal step.
 - Staged round playback for reveal, movement, pushes, drown effects, combat, growth, and next-round setup.
+- Keyword descriptions in the deckbuilder and tooltips on card keyword chips.
 - Pure TypeScript game state, rules, selectors, card definitions, and AI helpers under `src/lib/game`.
 - Unit tests for lane setup, legal action handling, reveal timing, terrain, keyword interactions, staged resolution snapshots, and combat-adjacent effects.
 
@@ -85,6 +86,7 @@ src/
     game/
       ai.ts                 Simple legal-action AI
       cards.ts              Card library and deck validation
+      keywords.ts           Keyword labels and player-facing help text
       rules.ts              Legal actions and round resolution
       rules.test.ts         Rules engine tests
       selectors.ts          Derived game-state helpers
@@ -118,7 +120,7 @@ Most gameplay objects are immutable from the caller's perspective: public rule h
 
 ## Areas for improvement
 
-- Add clearer in-game keyword help so players can understand card text without reading source code.
+- Add a fuller rules reference or glossary view beyond inline keyword descriptions.
 - Expand tests for remaining edge cases around simultaneous deaths, deck exhaustion, seed spawning conflicts, blocked movement, and win conditions.
 - Improve AI beyond random legal plays so it considers mana efficiency, lane pressure, lethal damage, and terrain synergies.
 - Add more visual feedback and accessibility polish for selected cards, legal lanes, reveal steps, and disabled actions.

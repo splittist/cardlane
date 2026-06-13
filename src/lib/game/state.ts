@@ -41,7 +41,11 @@ export function cloneState(state: GameState): GameState {
       pendingSeed: [...lane.pendingSeed]
     })),
     lastAction: state.lastAction ? { ...state.lastAction } : null,
-    lanePlayCount: { ...state.lanePlayCount }
+    phase: state.phase,
+    pendingReveal: {
+      player: state.pendingReveal.player.map((entry) => ({ ...entry, card: cloneCard(entry.card) })),
+      opponent: state.pendingReveal.opponent.map((entry) => ({ ...entry, card: cloneCard(entry.card) }))
+    }
   };
 }
 
@@ -109,12 +113,13 @@ export function createInitialState(options: InitialStateOptions = {}): GameState
     },
     lanes: createLanes(),
     currentTurn: 'player',
+    phase: 'planning',
     round: 1,
     winner: null,
     lastAction: null,
-    lanePlayCount: {
-      player: 0,
-      opponent: 0
+    pendingReveal: {
+      player: [],
+      opponent: []
     }
   };
 

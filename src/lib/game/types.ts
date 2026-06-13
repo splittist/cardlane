@@ -2,6 +2,7 @@ export type PlayerId = 'player' | 'opponent';
 export type Winner = PlayerId | 'draw' | null;
 export type Faction = 'sea' | 'forest';
 export type TerrainType = 'flooded' | 'overgrown' | 'mud';
+export type RoundPhase = 'planning' | 'reveal-ready';
 
 export interface CardKeywords {
   current?: number;
@@ -54,14 +55,20 @@ export interface Lane {
   pendingSeed: PlayerId[];
 }
 
+export interface PendingReveal {
+  laneIndex: number;
+  card: Card;
+}
+
 export interface GameState {
   players: Record<PlayerId, PlayerState>;
   lanes: Lane[];
   currentTurn: PlayerId;
+  phase: RoundPhase;
   round: number;
   winner: Winner;
   lastAction: Action | null;
-  lanePlayCount: Record<PlayerId, number>;
+  pendingReveal: Record<PlayerId, PendingReveal[]>;
 }
 
 export type PlayCardAction = {

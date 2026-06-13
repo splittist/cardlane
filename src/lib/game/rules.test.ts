@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { OPPONENT_STARTING_DECK, STARTING_DECK } from './cards';
-import { applyAction, getLegalActions } from './rules';
+import { applyAction, getLegalActions, getRoundResolutionSteps, revealRound } from './rules';
 import { createInitialState } from './state';
 
 function reorderDeck(baseDeck: readonly string[], front: string[]): string[] {
@@ -22,6 +22,11 @@ function reorderDeck(baseDeck: readonly string[], front: string[]): string[] {
   return [...ordered, ...remaining];
 }
 
+function revealAfterBothPlayersLock(state: ReturnType<typeof createInitialState>) {
+  const lockedState = applyAction(state, { type: 'end-turn', playerId: 'opponent' });
+  return revealRound(lockedState);
+}
+
 describe('sea vs forest rules', () => {
   it('creates five lanes in the initial state', () => {
     const state = createInitialState({ shuffle: false });
@@ -29,7 +34,7 @@ describe('sea vs forest rules', () => {
     expect(state.lanes).toHaveLength(5);
   });
 
-  it('allows only one play before reveal', () => {
+  it('allows multiple plays before reveal while mana and lanes remain', () => {
     const state = createInitialState({ shuffle: false });
     const playerPlay = getLegalActions(state, 'player').find((action) => action.type === 'play-card');
 
@@ -40,8 +45,36 @@ describe('sea vs forest rules', () => {
     const afterPlay = applyAction(state, playerPlay);
     const followup = getLegalActions(afterPlay, 'player');
 
-    expect(followup.filter((action) => action.type === 'play-card')).toHaveLength(0);
+    expect(afterPlay.pendingReveal.player).toHaveLength(1);
+    expect(followup.filter((action) => action.type === 'play-card').length).toBeGreaterThan(0);
     expect(followup.some((action) => action.type === 'end-turn')).toBe(true);
+  });
+
+  it('blocks queuing two cards into the same lane in one planning phase', () => {
+    let state = createInitialState({ shuffle: false });
+    const firstPlay = getLegalActions(state, 'player').find((action) => action.type === 'play-card' && action.laneIndex === 0);
+
+    if (!firstPlay || firstPlay.type !== 'play-card') {
+      throw new Error('Expected a legal play-card action for lane 1.');
+    }
+
+    state = applyAction(state, firstPlay);
+
+    const secondIntoSameLane = getLegalActions(state, 'player').filter(
+      (action) => action.type === 'play-card' && action.laneIndex === 0
+    );
+
+    expect(secondIntoSameLane).toHaveLength(0);
+  });
+
+  it('pauses after both turns until reveal is triggered', () => {
+    let state = createInitialState({ shuffle: false });
+
+    state = applyAction(state, { type: 'end-turn', playerId: 'player' });
+    state = applyAction(state, { type: 'end-turn', playerId: 'opponent' });
+
+    expect(state.phase).toBe('reveal-ready');
+    expect(state.round).toBe(1);
   });
 
   it('resolves Current pushes using initiative order', () => {
@@ -73,7 +106,7 @@ describe('sea vs forest rules', () => {
       cardUid: stag.uid,
       laneIndex: 2
     });
-    state = applyAction(state, { type: 'end-turn', playerId: 'opponent' });
+    state = revealAfterBothPlayersLock(state);
 
     expect(state.round).toBe(2);
     expect(state.lanes[2].playerCard?.id).toBe('wave-lancer');
@@ -109,7 +142,7 @@ describe('sea vs forest rules', () => {
       cardUid: stag.uid,
       laneIndex: 1
     });
-    state = applyAction(state, { type: 'end-turn', playerId: 'opponent' });
+    state = revealAfterBothPlayersLock(state);
 
     expect(state.lanes[1].terrain).toBe('flooded');
     expect(state.lanes[1].opponentCard).toBeNull();
@@ -138,10 +171,58 @@ describe('sea vs forest rules', () => {
       laneIndex: 0
     });
     state = applyAction(state, { type: 'end-turn', playerId: 'player' });
-    state = applyAction(state, { type: 'end-turn', playerId: 'opponent' });
+    state = revealAfterBothPlayersLock(state);
 
     expect(state.lanes[0].terrain).toBe('overgrown');
     expect(state.lanes[0].playerCard?.attack).toBe(4);
     expect(state.lanes[0].playerCard?.currentHealth).toBe(4);
+  });
+
+  it('exposes staged round snapshots without changing the final reveal result', () => {
+    const playerDeck = reorderDeck(STARTING_DECK, ['drown-priest', 'wave-lancer', 'reef-runner', 'tidal-school']);
+    const opponentDeck = reorderDeck(OPPONENT_STARTING_DECK, ['thorn-stag', 'bark-warden', 'sapling-herder', 'bog-mystic']);
+    let state = createInitialState({
+      shuffle: false,
+      playerDeckDefinition: playerDeck,
+      opponentDeckDefinition: opponentDeck
+    });
+
+    const drownPriest = state.players.player.hand.find((card) => card.id === 'drown-priest');
+    const stag = state.players.opponent.hand.find((card) => card.id === 'thorn-stag');
+
+    if (!drownPriest || !stag) {
+      throw new Error('Expected drown-priest and thorn-stag in opening hands.');
+    }
+
+    state = applyAction(state, {
+      type: 'play-card',
+      playerId: 'player',
+      cardUid: drownPriest.uid,
+      laneIndex: 1
+    });
+    state = applyAction(state, { type: 'end-turn', playerId: 'player' });
+    state = applyAction(state, {
+      type: 'play-card',
+      playerId: 'opponent',
+      cardUid: stag.uid,
+      laneIndex: 1
+    });
+    state = applyAction(state, { type: 'end-turn', playerId: 'opponent' });
+
+    const steps = getRoundResolutionSteps(state);
+    const finalState = revealRound(state);
+
+    expect(steps.map((step) => step.label)).toEqual([
+      'Reveal',
+      'Tide moves',
+      'Current pushes',
+      'Drown',
+      'Combat',
+      'Growth',
+      'Round 2'
+    ]);
+    expect(steps[0].state.lanes[1].playerCard?.id).toBe('drown-priest');
+    expect(steps[3].state.lanes[1].opponentCard).toBeNull();
+    expect(steps[steps.length - 1].state).toEqual(finalState);
   });
 });

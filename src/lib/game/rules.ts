@@ -1,8 +1,17 @@
 import { drawCard, MAX_MANA, cloneState } from './state';
 import type { Action, Card, GameState, Lane, PlayerId, Winner } from './types';
 
+export interface ResolutionStep {
+  label: string;
+  state: GameState;
+}
+
 function getLaneSlot(playerId: PlayerId): 'playerCard' | 'opponentCard' {
   return playerId === 'player' ? 'playerCard' : 'opponentCard';
+}
+
+function hasPendingRevealInLane(state: GameState, playerId: PlayerId, laneIndex: number): boolean {
+  return state.pendingReveal[playerId].some((entry) => entry.laneIndex === laneIndex);
 }
 
 function getOpponentId(playerId: PlayerId): PlayerId {
@@ -439,6 +448,30 @@ function resolveEndOfTurnEffects(state: GameState): void {
   }
 }
 
+function resolveRevealPhase(state: GameState): void {
+  const initiativeOrder = getInitiativeOrder(state.round);
+
+  for (const owner of initiativeOrder) {
+    for (const pending of state.pendingReveal[owner]) {
+      const lane = state.lanes[pending.laneIndex];
+      const slot = getLaneSlot(owner);
+
+      if (!lane[slot]) {
+        lane[slot] = {
+          ...pending.card,
+          enteredThisRound: true
+        };
+        applyTerrainOnEntry(lane, lane[slot] as Card);
+      }
+    }
+  }
+
+  state.pendingReveal = {
+    player: [],
+    opponent: []
+  };
+}
+
 function spawnSeeds(state: GameState): void {
   for (const lane of state.lanes) {
     if (lane.pendingSeed.length === 0) {
@@ -474,34 +507,79 @@ function startNextRound(state: GameState): GameState {
   withDraw = drawCard(withDraw, 'opponent');
   withDraw.round += 1;
   withDraw.currentTurn = 'player';
+  withDraw.phase = 'planning';
   withDraw.lastAction = null;
-  withDraw.lanePlayCount = {
-    player: 0,
-    opponent: 0
+  withDraw.pendingReveal = {
+    player: [],
+    opponent: []
   };
 
   return withDraw;
 }
 
-function resolveRound(state: GameState): GameState {
+function buildResolutionStep(label: string, state: GameState): ResolutionStep {
+  return {
+    label,
+    state: cloneState(state)
+  };
+}
+
+function assertRevealRoundReady(state: GameState): void {
+  if (state.winner) {
+    throw new Error('The game is already over.');
+  }
+
+  if (state.phase !== 'reveal-ready') {
+    throw new Error('The round is not ready to reveal.');
+  }
+
+  if (state.pendingReveal.player.length === 0 && state.pendingReveal.opponent.length === 0) {
+    throw new Error('There are no facedown plays to reveal.');
+  }
+}
+
+export function getRoundResolutionSteps(state: GameState): ResolutionStep[] {
+  assertRevealRoundReady(state);
+
   const nextState = cloneState(state);
+  const steps: ResolutionStep[] = [];
+
+  resolveRevealPhase(nextState);
+  steps.push(buildResolutionStep('Reveal', nextState));
 
   resolveTideMoves(nextState);
+  steps.push(buildResolutionStep('Tide moves', nextState));
+
   resolveCurrentPushes(nextState);
+  steps.push(buildResolutionStep('Current pushes', nextState));
+
   resolveDrown(nextState);
+  steps.push(buildResolutionStep('Drown', nextState));
+
   resolveCombat(nextState);
+  steps.push(buildResolutionStep('Combat', nextState));
 
   if (nextState.winner) {
-    return nextState;
+    return steps;
   }
 
   resolveEndOfTurnEffects(nextState);
+  steps.push(buildResolutionStep('Growth', nextState));
 
-  return startNextRound(nextState);
+  const nextRoundState = startNextRound(nextState);
+  steps.push(buildResolutionStep(`Round ${nextRoundState.round}`, nextRoundState));
+
+  return steps;
+}
+
+function resolveRound(state: GameState): GameState {
+  const steps = getRoundResolutionSteps(state);
+
+  return steps[steps.length - 1].state;
 }
 
 export function getLegalActions(state: GameState, playerId: PlayerId = state.currentTurn): Action[] {
-  if (state.winner || playerId !== state.currentTurn) {
+  if (state.winner || state.phase !== 'planning' || playerId !== state.currentTurn) {
     return [];
   }
 
@@ -509,21 +587,19 @@ export function getLegalActions(state: GameState, playerId: PlayerId = state.cur
   const slot = getLaneSlot(playerId);
   const actions: Action[] = [];
 
-  if (state.lanePlayCount[playerId] < 1) {
-    for (const card of player.hand) {
-      if (card.cost > player.mana) {
-        continue;
-      }
+  for (const card of player.hand) {
+    if (card.cost > player.mana) {
+      continue;
+    }
 
-      for (const lane of state.lanes) {
-        if (!lane[slot]) {
-          actions.push({
-            type: 'play-card',
-            playerId,
-            cardUid: card.uid,
-            laneIndex: lane.index
-          });
-        }
+    for (const lane of state.lanes) {
+      if (!lane[slot] && !hasPendingRevealInLane(state, playerId, lane.index)) {
+        actions.push({
+          type: 'play-card',
+          playerId,
+          cardUid: card.uid,
+          laneIndex: lane.index
+        });
       }
     }
   }
@@ -538,15 +614,15 @@ export function applyAction(state: GameState, action: Action): GameState {
     throw new Error('The game is already over.');
   }
 
+  if (state.phase !== 'planning') {
+    throw new Error('The round is waiting for reveal.');
+  }
+
   if (action.playerId !== state.currentTurn) {
     throw new Error('It is not this player\'s turn.');
   }
 
   if (action.type === 'play-card') {
-    if (state.lanePlayCount[action.playerId] >= 1) {
-      throw new Error('You can only play one unit before reveal.');
-    }
-
     const nextState = cloneState(state);
     const player = nextState.players[action.playerId];
     const cardIndex = findCardIndex(nextState, action.playerId, action.cardUid);
@@ -564,19 +640,19 @@ export function applyAction(state: GameState, action: Action): GameState {
     const lane = findLane(nextState, action.laneIndex);
     const slot = getLaneSlot(action.playerId);
 
-    if (lane[slot]) {
+    if (lane[slot] || hasPendingRevealInLane(nextState, action.playerId, action.laneIndex)) {
       throw new Error('Lane is already occupied.');
     }
 
     player.hand = player.hand.filter((handCard) => handCard.uid !== action.cardUid);
     player.mana -= card.cost;
-    lane[slot] = {
-      ...card,
-      enteredThisRound: true
-    };
-    applyTerrainOnEntry(lane, lane[slot] as Card);
-
-    nextState.lanePlayCount[action.playerId] += 1;
+    nextState.pendingReveal[action.playerId] = [...nextState.pendingReveal[action.playerId], {
+      laneIndex: action.laneIndex,
+      card: {
+        ...card,
+        enteredThisRound: true
+      }
+    }];
     nextState.lastAction = action;
 
     return nextState;
@@ -590,10 +666,16 @@ export function applyAction(state: GameState, action: Action): GameState {
     };
   }
 
-  const roundResolvedState = resolveRound({
+  return {
     ...cloneState(state),
+    currentTurn: 'player',
+    phase: 'reveal-ready',
     lastAction: action
-  });
+  };
+}
 
-  return roundResolvedState;
+export function revealRound(state: GameState): GameState {
+  assertRevealRoundReady(state);
+
+  return resolveRound(cloneState(state));
 }

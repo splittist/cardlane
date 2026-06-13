@@ -10,6 +10,14 @@
   export let playableCardIds: string[] = [];
   export let selectedCardUid: string | null = null;
 
+  $: pendingRevealByLane = state.lanes.reduce<Record<number, { player: boolean; opponent: boolean }>>((acc, lane) => {
+    acc[lane.index] = {
+      player: state.pendingReveal.player.some((entry) => entry.laneIndex === lane.index),
+      opponent: state.pendingReveal.opponent.some((entry) => entry.laneIndex === lane.index)
+    };
+    return acc;
+  }, {});
+
   const dispatch = createEventDispatcher<{
     cardSelected: { cardUid: string };
     laneSelected: { laneIndex: number };
@@ -29,7 +37,13 @@
 
   <div class="board__lanes">
     {#each state.lanes as lane (lane.index)}
-      <Lane lane={lane} {selectedCardUid} on:laneSelected={(event) => dispatch('laneSelected', event.detail)} />
+      <Lane
+        lane={lane}
+        {selectedCardUid}
+        showPlayerPendingReveal={pendingRevealByLane[lane.index]?.player ?? false}
+        showOpponentPendingReveal={pendingRevealByLane[lane.index]?.opponent ?? false}
+        on:laneSelected={(event) => dispatch('laneSelected', event.detail)}
+      />
     {/each}
   </div>
 

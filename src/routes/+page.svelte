@@ -2,7 +2,7 @@
   import Board from '$lib/components/Board.svelte';
   import { CARD_LIBRARY, DECK_SIZE, MAX_COPIES_PER_CARD, STARTING_DECK } from '$lib/game/cards';
   import { chooseAiAction } from '$lib/game/ai';
-  import { applyAction, getLegalActions } from '$lib/game/rules';
+  import { applyAction, getLegalActions, getRoundResolutionSteps } from '$lib/game/rules';
   import { getPlayableCards } from '$lib/game/selectors';
   import { createInitialState } from '$lib/game/state';
   import type { GameState } from '$lib/game/types';
@@ -13,10 +13,18 @@
   let selectedDeckDefinition: string[] = [...STARTING_DECK];
   let state: GameState = createInitialState({ playerDeckDefinition: selectedDeckDefinition });
   let selectedCardUid: string | null = null;
+  let isResolving = false;
+  let resolutionLabel: string | null = null;
+  let resolutionRunId = 0;
+
+  const REVEAL_STEP_DELAY_MS = 425;
 
   $: playableCardIds = getPlayableCards(state, 'player').map((card) => card.uid);
   $: legalPlayerActions = getLegalActions(state, 'player');
   $: playerTurn = state.currentTurn === 'player' && !state.winner;
+  $: revealReady = state.phase === 'reveal-ready' && !state.winner;
+  $: playerQueuedCount = state.pendingReveal.player.length;
+  $: opponentQueuedCount = state.pendingReveal.opponent.length;
   $: deckCardCount = selectedDeckDefinition.length;
   $: isDeckValid = deckCardCount === DECK_SIZE;
   $: copiesByCardId = selectedDeckDefinition.reduce<Record<string, number>>((counts, cardId) => {
@@ -43,7 +51,7 @@
   function handleCardSelected(event: CustomEvent<{ cardUid: string }>): void {
     const { cardUid } = event.detail;
 
-    if (!playerTurn || !playableCardIds.includes(cardUid)) {
+    if (isResolving || !playerTurn || !playableCardIds.includes(cardUid)) {
       return;
     }
 
@@ -51,7 +59,7 @@
   }
 
   function handleLaneSelected(event: CustomEvent<{ laneIndex: number }>): void {
-    if (!selectedCardUid || !playerTurn) {
+    if (isResolving || !selectedCardUid || !playerTurn) {
       return;
     }
 
@@ -75,13 +83,13 @@
   }
 
   function runOpponentTurn(): void {
-    while (state.currentTurn === 'opponent' && !state.winner) {
+    while (state.currentTurn === 'opponent' && state.phase === 'planning' && !state.winner) {
       state = applyAction(state, chooseAiAction(state));
     }
   }
 
   function endTurn(): void {
-    if (!playerTurn || mode !== 'battle') {
+    if (isResolving || !playerTurn || revealReady || mode !== 'battle') {
       return;
     }
 
@@ -90,22 +98,67 @@
     runOpponentTurn();
   }
 
+  function waitForResolutionStep(delayMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, delayMs);
+    });
+  }
+
+  async function revealQueuedCards(): Promise<void> {
+    if (isResolving || !revealReady || mode !== 'battle') {
+      return;
+    }
+
+    const steps = getRoundResolutionSteps(state);
+    const activeRunId = ++resolutionRunId;
+
+    isResolving = true;
+    selectedCardUid = null;
+
+    for (const step of steps) {
+      if (activeRunId !== resolutionRunId) {
+        return;
+      }
+
+      resolutionLabel = step.label;
+      state = step.state;
+
+      await waitForResolutionStep(REVEAL_STEP_DELAY_MS);
+    }
+
+    if (activeRunId !== resolutionRunId) {
+      return;
+    }
+
+    isResolving = false;
+    resolutionLabel = null;
+  }
+
+  function cancelResolutionPlayback(): void {
+    resolutionRunId += 1;
+    isResolving = false;
+    resolutionLabel = null;
+  }
+
   function startBattle(): void {
     if (!isDeckValid) {
       return;
     }
 
+    cancelResolutionPlayback();
     state = createInitialState({ playerDeckDefinition: selectedDeckDefinition });
     mode = 'battle';
     selectedCardUid = null;
   }
 
   function resetBattle(): void {
+    cancelResolutionPlayback();
     state = createInitialState({ playerDeckDefinition: selectedDeckDefinition });
     selectedCardUid = null;
   }
 
   function openDeckbuilder(): void {
+    cancelResolutionPlayback();
     mode = 'deckbuilder';
     selectedCardUid = null;
   }
@@ -155,7 +208,19 @@
     </div>
     <div class="page__actions">
       {#if mode === 'battle'}
-        <button class="primary" type="button" on:click={endTurn} disabled={!playerTurn}>End turn</button>
+        {#if revealReady}
+          <button class="primary" type="button" on:click={revealQueuedCards} disabled={isResolving}>
+            {#if isResolving}
+              Resolving…
+            {:else}
+              Reveal cards
+            {/if}
+          </button>
+        {:else}
+          <button class="primary" type="button" on:click={endTurn} disabled={!playerTurn || isResolving}>
+            Lock turn
+          </button>
+        {/if}
         <button type="button" on:click={resetBattle}>New game</button>
         <button type="button" on:click={openDeckbuilder}>Deckbuilder</button>
       {:else}
@@ -179,15 +244,31 @@
         </strong>
         <span>Start a new game to play again.</span>
       </section>
+    {:else if isResolving}
+      <section class="status status--resolving" aria-live="polite">
+        <strong>Resolving turn.</strong>
+        <span>{resolutionLabel ? `${resolutionLabel}...` : 'Applying card effects...'}</span>
+      </section>
+    {:else if revealReady}
+      <section class="status status--reveal">
+        <strong>Reveal ready.</strong>
+        <span>Both sides have locked their facedown plays. Press reveal to resolve the round.</span>
+      </section>
     {:else if playerTurn}
       <section class="status">
         <strong>Your turn.</strong>
-        <span>Select a playable card, then tap an open lane.</span>
+        <span>
+          {#if playerQueuedCount > 0}
+            {playerQueuedCount} card{playerQueuedCount === 1 ? '' : 's'} queued. Play more or lock turn.
+          {:else}
+            Select playable cards, then tap open lanes to queue them face-down.
+          {/if}
+        </span>
       </section>
     {:else}
       <section class="status">
         <strong>AI turn.</strong>
-        <span>The opponent is taking actions.</span>
+        <span>The opponent is locking facedown plays.</span>
       </section>
     {/if}
 
@@ -284,6 +365,11 @@
     flex-wrap: wrap;
   }
 
+  .status--resolving {
+    border-color: #ffd166;
+    box-shadow: 0 0 0 1px rgb(255 209 102 / 0.2), 0 0 1.2rem rgb(255 209 102 / 0.15);
+  }
+
   h2 {
     margin: 0;
     font-size: 1rem;
@@ -315,6 +401,11 @@
     border-radius: 1rem;
     background: #11182e;
     padding: 0.9rem 1rem;
+  }
+
+  .status--reveal {
+    border-color: #ffd166;
+    background: linear-gradient(180deg, #171f36, #11182e);
   }
 
   .deckbuilder {
